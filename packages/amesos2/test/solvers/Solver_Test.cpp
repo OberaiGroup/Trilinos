@@ -214,6 +214,15 @@ int main(int argc, char*argv[])
 
   Teuchos::RCP<const Teuchos::Comm<int> > comm = Tpetra::getDefaultComm();
 
+  RCP<const Teuchos::MpiComm<int> > matMpiComm = 
+    Teuchos::rcp_dynamic_cast<const Teuchos::MpiComm<int> > (comm);
+
+  std::cout << std::endl
+    << "comm->getRank() = " << comm->getRank() << std::endl
+    << "comm->getSize() = " << comm->getSize() << std::endl
+    << "*(matMpiComm->getRawMpiComm()) = " << *(matMpiComm->getRawMpiComm()) << std::endl
+    << std::endl;
+
   int root = 0;
 
   string xml_file("solvers_test.xml"); // default xml file

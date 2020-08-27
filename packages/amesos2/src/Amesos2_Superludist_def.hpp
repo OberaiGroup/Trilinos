@@ -100,7 +100,12 @@ namespace Amesos2 {
     const int myRank = comm->getRank ();
     const int numProcs = comm->getSize ();
 
-    SLUD::int_t nprow, npcol;
+    std::cout << std::endl
+      << "comm = " << comm << std::endl
+      << "MPI_COMM_WORLD = " << MPI_COMM_WORLD << std::endl;
+
+    SLUD::int_t nprow = 0;
+    SLUD::int_t npcol = 0;
     get_default_grid_size (numProcs, nprow, npcol);
 
     {
@@ -128,8 +133,13 @@ namespace Amesos2 {
         "exist, which likely implies that the Teuchos::MpiComm was constructed "
         "incorrectly.  It means something different than if the MPI_Comm were "
         "MPI_COMM_NULL.");
-      MPI_Comm rawMpiComm = (* (matMpiComm->getRawMpiComm ())) ();
+      // MPI_Comm rawMpiComm = (* (matMpiComm->getRawMpiComm ())) ();
+      MPI_Comm rawMpiComm = MPI_COMM_WORLD;
       data_.mat_comm = rawMpiComm;
+      std::cout << std::endl
+        << "set data_.mat_comm = rawMpiComm " << std::endl
+        << "data_.mat_comm = " << data_.mat_comm << std::endl
+        << "MPI_COMM_WORLD = " << MPI_COMM_WORLD << std::endl;
       // This looks a bit like ScaLAPACK's grid initialization (which
       // technically takes place in the BLACS, not in ScaLAPACK
       // proper). See http://netlib.org/scalapack/slug/node34.html.
@@ -160,6 +170,14 @@ namespace Amesos2 {
     data_.perm_r.resize(this->globalNumRows_);
     data_.perm_c.resize(this->globalNumCols_);
 
+    std::cout << std::endl
+      << "setting data_.mat_comm from " << data_.mat_comm  << std::endl
+      << "to MPI_COMM_WORLD" << MPI_COMM_WORLD << std::endl;
+    data_.mat_comm = MPI_COMM_WORLD;
+    std::cout << std::endl
+      << "data_.mat_comm = " << data_.mat_comm << std::endl
+      << "MPI_COMM_WORLD = " << MPI_COMM_WORLD << std::endl;
+
     ////////////////////////////////////////////////////////////////
     // Set up a communicator for the parallel column ordering and //
     // parallel symbolic factorization.                           //
@@ -172,6 +190,18 @@ namespace Amesos2 {
     data_.domains = (int) ( pow(2.0, floor(log10((double)nprow*npcol)/log10(2.0))) );
 
     const int color = (myRank < data_.domains) ? 0 : MPI_UNDEFINED;
+
+    std::cout << std::endl
+      << "color = " << color << std::endl
+      << "data_.domains = " << data_.domains << std::endl
+      << "nprow = " << nprow << std::endl
+      << "npcol = " << npcol << std::endl
+      << "MPI_UNDEFINED = " << MPI_UNDEFINED << std::endl
+      << "data_.mat_comm = " << data_.mat_comm << std::endl
+      << "this->getComm() = " << this->getComm() << std::endl
+      << "this->matrixA_->getComm() = " << this->matrixA_->getComm() << std::endl
+      << "myRank = " << myRank << std::endl;
+
     MPI_Comm_split (data_.mat_comm, color, myRank, &(data_.symb_comm));
 
     //////////////////////////////////////////////////////////////////////
@@ -654,9 +684,22 @@ namespace Amesos2 {
       SLUD::int_t nprow = parameterList->template get<SLUD::int_t>("nprow");
       SLUD::int_t npcol = parameterList->template get<SLUD::int_t>("npcol");
 
+      std::cout << std::endl
+        << "in setParameters_impl" << std::endl
+        << "values are:"  << std::endl
+        << "data_.mat_comm = " << data_.mat_comm << std::endl
+        << "nprow  = " << nprow  << std::endl
+        << "npcol  = " << npcol  << std::endl
+        << "data_.grid.nprow  = " << data_.grid.nprow  << std::endl
+        << "data_.grid.npcol  = " << data_.grid.npcol  << std::endl;
+
       TEUCHOS_TEST_FOR_EXCEPTION( nprow * npcol > this->getComm()->getSize(),
                           std::invalid_argument,
-                          "nprow and npcol combination invalid" );
+                          "nprow and npcol combination invalid \n" <<
+                          "nprow = " << nprow << "\n"
+                          "npcol = " << npcol << "\n"
+                          "this->getComm()->getSize() = " <<  
+                            this->getComm()->getSize() << "\n" );
 
       if( (npcol != data_.grid.npcol) || (nprow != data_.grid.nprow) ){
         // De-allocate the default grid that was initialized in the constructor
@@ -719,6 +762,9 @@ namespace Amesos2 {
     using Teuchos::setStringToIntegralParameter;
     using Teuchos::stringToIntegralParameterEntryValidator;
 
+    std::cout << std::endl
+      << "Just entered getValidParameters_impl() in Amesos2_Superludist_def.hpp" << std::endl;
+
     static Teuchos::RCP<const Teuchos::ParameterList> valid_params;
 
     if( is_null(valid_params) ){
@@ -728,12 +774,34 @@ namespace Amesos2 {
         = Teuchos::rcp( new EnhancedNumberValidator<SLUD::int_t>() );
       col_row_validator->setMin(1);
 
+
+     std::cout << std::endl
+        << "calling get_default_grid_size to set nprow, npcol in getValidParameters_impl()" << std::endl;
+      
+      data_.grid.nprow = 0;
+      data_.grid.npcol = 0;
+      get_default_grid_size( (this->getComm())->getSize(), data_.grid.nprow, data_.grid.npcol);
+
+      std::cout << std::endl
+        << "in getValidParameters_impl:" << std::endl
+        << "About to set pl->set(...)" << std::endl
+        << "nprow = " << data_.grid.nprow << std::endl
+        << "npcol = " << data_.grid.npcol << std::endl;
+
+     std::cout << std::endl
+        << "back from calling get_default_grid_size to set nprow, npcol" << std::endl
+        << "setting pt->set(...)" << std::endl;
+
       pl->set("npcol", data_.grid.npcol,
               "Number of columns in the processor grid. "
               "Must be set with nprow", col_row_validator);
       pl->set("nprow", data_.grid.nprow,
               "Number of rows in the SuperLU_DIST processor grid. "
               "Must be set together with npcol", col_row_validator);
+      std::cout << std::endl
+        << "in getValidParameters_impl:" << std::endl
+        << "nprow = " << data_.grid.nprow << std::endl
+        << "npcol = " << data_.grid.npcol << std::endl;
 
       // validator will catch any value besides NOTRANS
       setStringToIntegralParameter<SLUD::trans_t>("Trans", "NOTRANS",
@@ -786,6 +854,14 @@ namespace Amesos2 {
     TEUCHOS_TEST_FOR_EXCEPTION( nprocs < 1,
                         std::invalid_argument,
                         "Number of MPI processes must be at least 1" );
+
+    std::cout << std::endl
+      << "in get_default_grid_size" << std::endl
+      << "passed values are:" << std::endl
+      << "nprocs = " << nprocs << std::endl
+      << "nprow  = " << nprow << std::endl
+      << "npcol  = " << npcol << std::endl;
+
     SLUD::int_t c, r = 1;
     while( r*r <= nprocs ) r++;
     nprow = npcol = --r;                // fall back to square grid
@@ -800,6 +876,12 @@ namespace Amesos2 {
       nprow = r;
       npcol = c;
     }
+    std::cout << std::endl
+      << "leaving get_default_grid_size" << std::endl
+      << "final values are:" << std::endl
+      << "nprocs = " << nprocs << std::endl
+      << "nprow  = " << nprow << std::endl
+      << "npcol  = " << npcol << std::endl;
   }
 
 
